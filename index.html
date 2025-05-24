@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crash Game Premium</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #121212; color: white; text-align: center; padding: 20px; margin: 0; }
+        .game-container { max-width: 500px; margin: 0 auto; background-color: #1e1e1e; padding: 20px; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .multiplier-display { font-size: 3em; margin: 20px 0; color: #4CAF50; font-weight: bold; }
+        .crash-display { font-size: 4em; margin: 10px 0; color: #f44336; opacity: 0; transition: opacity 0.3s; }
+        .result-display { font-size: 3em; margin: 10px 0; opacity: 0; transition: opacity 0.3s; }
+        .graph-container { 
+            height: 300px; 
+            position: relative; 
+            margin: 20px 0; 
+            background-color: #252525; 
+            border-radius: 5px; 
+            overflow: hidden;
+        }
+        #graphLine { width: 100%; height: 100%; }
+        .grid-line { stroke: #333; stroke-width: 0.5; }
+        .axis-label { font-size: 6px; fill: #aaa; } /* AJUSTADO: 6px (antes 7.5px) */
+        .controls { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+        input, button, select { padding: 12px; border-radius: 5px; border: none; font-size: 1em; }
+        button { color: white; font-weight: bold; cursor: pointer; }
+        #placeBet { background-color: #4CAF50; }
+        #cashOut { background-color: #2196F3; }
+        .stats { display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .reward-section { margin-top: 15px; padding: 15px; background-color: #1a237e; border-radius: 5px; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .history { margin-top: 20px; max-height: 150px; overflow-y: auto; border-top: 1px solid #333; padding-top: 10px; }
+        .history-item { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #333; }
+        .history-multiplier { font-weight: bold; }
+        .history-profit { color: #4CAF50; }
+        .history-loss { color: #f44336; }
+        .history-time { color: #aaa; font-size: 0.8em; }
+        .last-results { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
+        .last-result-item { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 5px; font-weight: bold; background-color: #252525; }
+        .auto-cashout { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
+        .cashout-label { text-align: left; margin-bottom: 5px; font-size: 0.9em; }
+        #autoCashoutInput { width: 100%; }
+        #notification { 
+            position: fixed; 
+            top: 20px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            background: #f44336; 
+            color: white; 
+            padding: 10px 20px; 
+            border-radius: 5px; 
+            z-index: 1000; 
+            display: none; 
+        }
+        .credits { 
+            margin-top: 20px; 
+            font-size: 0.8em; 
+            color: #666; 
+        }
+
+        /* Animaciones */
+        @keyframes crashShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+        @keyframes lineBlink {
+            0%, 100% { stroke-opacity: 1; }
+            50% { stroke-opacity: 0.5; }
+        }
+        .crash-effect {
+            animation: crashShake 0.4s ease-out, lineBlink 0.6s linear;
+        }
+    </style>
+</head>
+<body>
+    <div id="notification"></div>
+    <div class="game-container">
+        <h1>CRASH GAME</h1>
+        
+        <div class="stats">
+            <div>Bankroll: <span id="bankroll">1,000,000.00</span></div>
+            <div>Balance: <span id="balance">0.00</span></div>
+        </div>
+        
+        <div class="reward-section">
+            <h3>Recompensas</h3>
+            <div id="rewardTimer">00:10:00</div>
+            <button id="claimReward" disabled>RECLAMAR</button>
+            <div id="rewardResult"></div>
+        </div>
+        
+        <div>Ronda #<span id="roundNumber">1</span> - Tiempo: <span id="countdown">5</span>s</div>
+        
+        <div class="last-results" id="lastResults">
+            <div class="last-result-item">-</div>
+            <div class="last-result-item">-</div>
+            <div class="last-result-item">-</div>
+            <div class="last-result-item">-</div>
+            <div class="last-result-item">-</div>
+        </div>
+        
+        <div class="graph-container" id="graphContainer">
+            <svg id="graphLine" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <!-- Ejes y cuadrícula -->
+                <line x1="0" y1="0" x2="0" y2="100" class="grid-line" />
+                <line x1="0" y1="100" x2="100" y2="100" class="grid-line" />
+                <!-- Líneas horizontales (Y) -->
+                <line x1="0" y1="90" x2="100" y2="90" class="grid-line" />
+                <line x1="0" y1="80" x2="100" y2="80" class="grid-line" />
+                <line x1="0" y1="70" x2="100" y2="70" class="grid-line" />
+                <line x1="0" y1="60" x2="100" y2="60" class="grid-line" />
+                <line x1="0" y1="50" x2="100" y2="50" class="grid-line" />
+                <line x1="0" y1="40" x2="100" y2="40" class="grid-line" />
+                <line x1="0" y1="30" x2="100" y2="30" class="grid-line" />
+                <line x1="0" y1="20" x2="100" y2="20" class="grid-line" />
+                <line x1="0" y1="10" x2="100" y2="10" class="grid-line" />
+                <!-- Líneas verticales (X) -->
+                <line x1="10" y1="0" x2="10" y2="100" class="grid-line" />
+                <line x1="20" y1="0" x2="20" y2="100" class="grid-line" />
+                <line x1="30" y1="0" x2="30" y2="100" class="grid-line" />
+                <line x1="40" y1="0" x2="40" y2="100" class="grid-line" />
+                <line x1="50" y1="0" x2="50" y2="100" class="grid-line" />
+                <line x1="60" y1="0" x2="60" y2="100" class="grid-line" />
+                <line x1="70" y1="0" x2="70" y2="100" class="grid-line" />
+                <line x1="80" y1="0" x2="80" y2="100" class="grid-line" />
+                <line x1="90" y1="0" x2="90" y2="100" class="grid-line" />
+                <!-- Etiquetas Y (vertical) -->
+                <text x="2" y="95" class="axis-label">1</text>
+                <text x="2" y="85" class="axis-label">2y</text>
+                <text x="2" y="75" class="axis-label">3y</text>
+                <text x="2" y="65" class="axis-label">4y</text>
+                <text x="2" y="55" class="axis-label">5y</text>
+                <text x="2" y="45" class="axis-label">6y</text>
+                <text x="2" y="35" class="axis-label">7y</text>
+                <text x="2" y="25" class="axis-label">8y</text>
+                <text x="2" y="15" class="axis-label">9y</text>
+                <text x="2" y="5" class="axis-label">10y</text>
+                <!-- Etiquetas X (horizontal) -->
+                <text x="5" y="98" class="axis-label">1</text>
+                <text x="18" y="98" class="axis-label">2x</text>
+                <text x="28" y="98" class="axis-label">3x</text>
+                <text x="38" y="98" class="axis-label">4x</text>
+                <text x="48" y="98" class="axis-label">5x</text>
+                <text x="58" y="98" class="axis-label">6x</text>
+                <text x="68" y="98" class="axis-label">7x</text>
+                <text x="78" y="98" class="axis-label">8x</text>
+                <text x="88" y="98" class="axis-label">9x</text>
+                <text x="95" y="98" class="axis-label">10x</text>
+                <!-- Línea del gráfico (inicialmente vacía) -->
+                <line x1="5" y1="95" x2="5" y2="95" stroke="#4CAF50" stroke-width="1.5" /> <!-- AJUSTADO: 1.5 (antes 3) -->
+            </svg>
+        </div>
+        
+        <div class="multiplier-display" id="multiplier">1.00x</div>
+        <div class="crash-display" id="crashText">CRASH</div>
+        <div class="result-display" id="resultText"></div>
+        
+        <div>Apuesta: $<span id="currentBet">0.00</span> - Ganancia: $<span id="potentialWin">0.00</span></div>
+        
+        <div class="controls">
+            <input type="number" id="betAmount" placeholder="Monto" min="1" max="10000" value="10" step="0.01">
+            
+            <div class="auto-cashout">
+                <div class="cashout-label">Multiplicador auto-retiro:</div>
+                <input type="number" id="autoCashoutInput" placeholder="Ej: 1.25" min="1" step="0.01" value="2.00">
+            </div>
+            
+            <div>
+                <button id="placeBet">APOSTAR</button>
+                <button id="cashOut" disabled>RETIRAR</button>
+            </div>
+        </div>
+        
+        <div class="history" id="history">
+            <div style="text-align: left; margin-bottom: 10px; font-weight: bold;">Historial:</div>
+            <div id="historyItems"></div>
+        </div>
+
+        <div class="credits">
+            <p>Elaborado por Edixon V.V.T y DeepSeek Chat | v2.6</p>
+        </div>
+    </div>
+
+    <script>
+        // Variables del juego
+        let bankroll = 1000000, balance = 0, currentBet = 0, currentMultiplier = 1;
+        let gameRunning = false, playerPlaying = false, crashPoint = 0, roundNumber = 1;
+        let rewardTimer = 600, canClaimReward = false, lastRewardTime = 0;
+        let gameInterval, countdownInterval;
+        let gameHistory = [];
+        let lastResults = [];
+        let autoCashoutValue = 2.00;
+        
+        // Inicializar
+        loadGameData();
+        startCountdown();
+        startRewardTimer();
+        
+        // Funciones principales
+        function startRound() {
+            if (gameRunning) return;
+            gameRunning = true;
+            currentMultiplier = 1;
+            crashPoint = Math.max(1, 0.99 / (1 - Math.random())).toFixed(2);
+            
+            document.getElementById('graphLine').innerHTML = `
+                <!-- (Mantener ejes y cuadrícula) -->
+                <line x1="5" y1="95" x2="5" y2="95" stroke="#4CAF50" stroke-width="1.5" /> <!-- AJUSTADO: 1.5 -->
+            `;
+            document.getElementById('placeBet').disabled = true;
+            
+            const baseSpeed = 0.07;
+            const acceleration = 0.001;
+            
+            gameInterval = setInterval(() => {
+                currentMultiplier += (baseSpeed + acceleration * currentMultiplier) * 0.03;
+                const progress = Math.min(currentMultiplier / 10, 1);
+                const x = 5 + (progress * 90);
+                const y = 95 - (progress * 90);
+                
+                document.getElementById('multiplier').textContent = currentMultiplier.toFixed(2) + 'x';
+                document.getElementById('graphLine').innerHTML = `
+                    <!-- Ejes y cuadrícula -->
+                    <line x1="0" y1="0" x2="0" y2="100" class="grid-line" />
+                    <line x1="0" y1="100" x2="100" y2="100" class="grid-line" />
+                    <!-- Líneas horizontales (Y) -->
+                    <line x1="0" y1="90" x2="100" y2="90" class="grid-line" />
+                    <line x1="0" y1="80" x2="100" y2="80" class="grid-line" />
+                    <line x1="0" y1="70" x2="100" y2="70" class="grid-line" />
+                    <line x1="0" y1="60" x2="100" y2="60" class="grid-line" />
+                    <line x1="0" y1="50" x2="100" y2="50" class="grid-line" />
+                    <line x1="0" y1="40" x2="100" y2="40" class="grid-line" />
+                    <line x1="0" y1="30" x2="100" y2="30" class="grid-line" />
+                    <line x1="0" y1="20" x2="100" y2="20" class="grid-line" />
+                    <line x1="0" y1="10" x2="100" y2="10" class="grid-line" />
+                    <!-- Líneas verticales (X) -->
+                    <line x1="10" y1="0" x2="10" y2="100" class="grid-line" />
+                    <line x1="20" y1="0" x2="20" y2="100" class="grid-line" />
+                    <line x1="30" y1="0" x2="30" y2="100" class="grid-line" />
+                    <line x1="40" y1="0" x2="40" y2="100" class="grid-line" />
+                    <line x1="50" y1="0" x2="50" y2="100" class="grid-line" />
+                    <line x1="60" y1="0" x2="60" y2="100" class="grid-line" />
+                    <line x1="70" y1="0" x2="70" y2="100" class="grid-line" />
+                    <line x1="80" y1="0" x2="80" y2="100" class="grid-line" />
+                    <line x1="90" y1="0" x2="90" y2="100" class="grid-line" />
+                    <!-- Etiquetas Y (vertical) -->
+                    <text x="2" y="95" class="axis-label">1</text>
+                    <text x="2" y="85" class="axis-label">2y</text>
+                    <text x="2" y="75" class="axis-label">3y</text>
+                    <text x="2" y="65" class="axis-label">4y</text>
+                    <text x="2" y="55" class="axis-label">5y</text>
+                    <text x="2" y="45" class="axis-label">6y</text>
+                    <text x="2" y="35" class="axis-label">7y</text>
+                    <text x="2" y="25" class="axis-label">8y</text>
+                    <text x="2" y="15" class="axis-label">9y</text>
+                    <text x="2" y="5" class="axis-label">10y</text>
+                    <!-- Etiquetas X (horizontal) -->
+                    <text x="5" y="98" class="axis-label">1</text>
+                    <text x="18" y="98" class="axis-label">2x</text>
+                    <text x="28" y="98" class="axis-label">3x</text>
+                    <text x="38" y="98" class="axis-label">4x</text>
+                    <text x="48" y="98" class="axis-label">5x</text>
+                    <text x="58" y="98" class="axis-label">6x</text>
+                    <text x="68" y="98" class="axis-label">7x</text>
+                    <text x="78" y="98" class="axis-label">8x</text>
+                    <text x="88" y="98" class="axis-label">9x</text>
+                    <text x="95" y="98" class="axis-label">10x</text>
+                    <!-- Línea del gráfico -->
+                    <line x1="5" y1="95" x2="${x}" y2="${y}" stroke="#4CAF50" stroke-width="1.5" /> <!-- AJUSTADO: 1.5 -->
+                `;
+                
+                if (playerPlaying) {
+                    document.getElementById('potentialWin').textContent = (currentBet * currentMultiplier).toFixed(2);
+                    
+                    const inputValue = parseFloat(document.getElementById('autoCashoutInput').value);
+                    const currentAutoCashout = !isNaN(inputValue) && inputValue >= 1 ? inputValue : autoCashoutValue;
+                    
+                    if (currentAutoCashout > 0 && currentMultiplier >= currentAutoCashout) {
+                        cashOut();
+                    }
+                }
+                
+                if (currentMultiplier >= crashPoint) {
+                    clearInterval(gameInterval);
+                    endRound(x, y);
+                }
+            }, 30);
+        }
+        
+        function endRound(x, y) {
+            gameRunning = false;
+            
+            const angle = -5;
+            const graphContainer = document.getElementById('graphContainer');
+            const graphLine = document.getElementById('graphLine');
+            
+            graphLine.innerHTML = `
+                <!-- (Mantener ejes y cuadrícula) -->
+                <line x1="5" y1="95" x2="${x}" y2="${y}" 
+                      stroke="#f44336" stroke-width="1.5"  <!-- AJUSTADO: 1.5 -->
+                      transform="rotate(${angle}, ${x}, ${y})" />
+            `;
+            
+            graphContainer.classList.add('crash-effect');
+            setTimeout(() => graphContainer.classList.remove('crash-effect'), 600);
+            
+            document.getElementById('crashText').style.opacity = '1';
+            setTimeout(() => document.getElementById('crashText').style.opacity = '0', 2000);
+            
+            lastResults.unshift(currentMultiplier.toFixed(2));
+            if (lastResults.length > 5) lastResults.pop();
+            updateLastResultsUI();
+            
+            if (playerPlaying) {
+                const crashed = currentMultiplier >= crashPoint;
+                showResult(!crashed);
+                if (crashed) {
+                    bankroll += currentBet;
+                    addToHistory(currentMultiplier.toFixed(2), currentBet, 0, true);
+                } else {
+                    const winnings = currentBet * currentMultiplier;
+                    balance += winnings;
+                    bankroll -= (winnings - currentBet);
+                }
+                resetBet();
+            }
+            
+            roundNumber++;
+            startCountdown();
+            saveGameData();
+        }
+
+        // Resto de funciones (igual que antes)...
+        function updateLastResultsUI() {
+            const container = document.getElementById('lastResults');
+            container.innerHTML = '';
+            
+            lastResults.forEach(result => {
+                const item = document.createElement('div');
+                item.className = 'last-result-item';
+                item.textContent = result;
+                item.style.color = parseFloat(result) >= 2.0 ? '#4CAF50' : '#f44336';
+                container.appendChild(item);
+            });
+            
+            while (container.children.length < 5) {
+                const item = document.createElement('div');
+                item.className = 'last-result-item';
+                item.textContent = '-';
+                container.appendChild(item);
+            }
+        }
+        
+        function addToHistory(multiplier, betAmount, profit, isLoss) {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString();
+            
+            const historyItem = {
+                multiplier,
+                betAmount,
+                profit,
+                isLoss,
+                time: timeStr
+            };
+            
+            gameHistory.unshift(historyItem);
+            if (gameHistory.length > 10) gameHistory.pop();
+            
+            updateHistoryUI();
+        }
+        
+        function updateHistoryUI() {
+            const historyContainer = document.getElementById('historyItems');
+            historyContainer.innerHTML = '';
+            
+            gameHistory.forEach(item => {
+                const itemElement = document.createElement('div');
+                itemElement.className = 'history-item';
+                
+                itemElement.innerHTML = `
+                    <span class="history-multiplier">${item.multiplier}x</span>
+                    <span>$${item.betAmount.toFixed(2)}</span>
+                    ${item.isLoss ? 
+                        '<span class="history-loss">-$' + item.betAmount.toFixed(2) + '</span>' : 
+                        `<span class="history-profit">+$${item.profit.toFixed(2)}</span>`}
+                    <span class="history-time">${item.time}</span>
+                `;
+                
+                historyContainer.appendChild(itemElement);
+            });
+        }
+        
+        function placeBet() {
+            if (gameRunning) return;
+            
+            const betAmount = parseFloat(document.getElementById('betAmount').value);
+            const maxBet = bankroll * 0.1; // 10% del bankroll
+            
+            // Validar saldo suficiente
+            if (betAmount > balance) {
+                showNotification("No tienes suficiente balance", 'error');
+                return;
+            }
+            
+            // Validar límite del 10%
+            if (betAmount > maxBet) {
+                showNotification(`Máximo permitido: $${maxBet.toFixed(2)} (10% del bankroll)`, 'error');
+                return;
+            }
+            
+            if (betAmount > 0 && betAmount <= balance) {
+                const inputValue = parseFloat(document.getElementById('autoCashoutInput').value);
+                if (!isNaN(inputValue) && inputValue >= 1) {
+                    autoCashoutValue = parseFloat(inputValue.toFixed(2));
+                    document.getElementById('autoCashoutInput').value = autoCashoutValue.toFixed(2);
+                    saveGameData();
+                }
+                
+                playerPlaying = true;
+                currentBet = betAmount;
+                balance -= betAmount;
+                document.getElementById('currentBet').textContent = currentBet.toFixed(2);
+                document.getElementById('cashOut').disabled = false;
+                document.getElementById('placeBet').disabled = true;
+                updateUI();
+            }
+        }
+        
+        function cashOut() {
+            if (!gameRunning || !playerPlaying) return;
+            
+            const winnings = currentBet * currentMultiplier;
+            const netProfit = winnings - currentBet;
+            
+            balance += winnings;
+            bankroll -= netProfit;
+            
+            showResult(true);
+            addToHistory(currentMultiplier.toFixed(2), currentBet, netProfit, false);
+            resetBet();
+            updateUI();
+            saveGameData();
+        }
+        
+        function resetBet() {
+            playerPlaying = false;
+            currentBet = 0;
+            document.getElementById('currentBet').textContent = '0.00';
+            document.getElementById('potentialWin').textContent = '0.00';
+            document.getElementById('cashOut').disabled = true;
+            document.getElementById('placeBet').disabled = false;
+        }
+        
+        function startRewardTimer() {
+            const now = Math.floor(Date.now() / 1000);
+            rewardTimer = lastRewardTime === 0 ? 600 : Math.max(0, 600 - (now - lastRewardTime));
+            updateRewardTimer();
+        }
+        
+        function updateRewardTimer() {
+            if (rewardTimer <= 0) {
+                document.getElementById('claimReward').disabled = false;
+                document.getElementById('rewardTimer').textContent = "¡Reclama ahora!";
+                return;
+            }
+            
+            rewardTimer--;
+            const timerStr = `${Math.floor(rewardTimer/3600).toString().padStart(2,'0')}:${Math.floor((rewardTimer%3600)/60).toString().padStart(2,'0')}:${(rewardTimer%60).toString().padStart(2,'0')}`;
+            document.getElementById('rewardTimer').textContent = timerStr;
+            setTimeout(updateRewardTimer, 1000);
+        }
+        
+        function claimReward() {
+            const num = Math.floor(Math.random() * 99999) + 1;
+            let reward = 0;
+            
+            if (num <= 100 || num >= 98000) reward = 1000;
+            else if (num <= 1000 || num >= 90000) reward = 200;
+            else reward = 100;
+            
+            balance += reward;
+            lastRewardTime = Math.floor(Date.now() / 1000);
+            document.getElementById('rewardResult').textContent = `Número: ${num.toString().padStart(5,'0')} - Ganaste: ${reward}`;
+            document.getElementById('claimReward').disabled = true;
+            rewardTimer = 600;
+            updateRewardTimer();
+            updateUI();
+            saveGameData();
+        }
+        
+        function updateUI() {
+            document.getElementById('balance').textContent = balance.toFixed(2);
+            document.getElementById('bankroll').textContent = bankroll.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+        
+        function showResult(win) {
+            const result = document.getElementById('resultText');
+            result.textContent = win ? 'GANASTE!' : 'PERDISTE!';
+            result.style.color = win ? '#4CAF50' : '#f44336';
+            result.style.opacity = '1';
+            setTimeout(() => result.style.opacity = '0', 3000);
+        }
+        
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.style.background = type === 'error' ? '#f44336' : '#4CAF50';
+            notification.style.display = 'block';
+            
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 2000);
+        }
+        
+        function startCountdown() {
+            let count = 5;
+            document.getElementById('placeBet').disabled = false;
+            document.getElementById('countdown').textContent = count;
+            
+            clearInterval(countdownInterval);
+            countdownInterval = setInterval(() => {
+                count--;
+                document.getElementById('countdown').textContent = count;
+                
+                if (count <= 0) {
+                    clearInterval(countdownInterval);
+                    startRound();
+                }
+            }, 1000);
+        }
+        
+        function loadGameData() {
+            const data = JSON.parse(localStorage.getItem('crashGameData') || '{}');
+            bankroll = data.bankroll || 1000000;
+            balance = data.balance || 0;
+            lastRewardTime = data.lastRewardTime || 0;
+            gameHistory = data.gameHistory || [];
+            lastResults = data.lastResults || [];
+            autoCashoutValue = data.autoCashoutValue || 2.00;
+            document.getElementById('autoCashoutInput').value = autoCashoutValue.toFixed(2);
+            updateHistoryUI();
+            updateLastResultsUI();
+            updateUI();
+        }
+        
+        function saveGameData() {
+            localStorage.setItem('crashGameData', JSON.stringify({ 
+                bankroll, 
+                balance, 
+                lastRewardTime,
+                gameHistory,
+                lastResults,
+                autoCashoutValue
+            }));
+        }
+        
+        // Event listeners
+        document.getElementById('placeBet').addEventListener('click', placeBet);
+        document.getElementById('cashOut').addEventListener('click', cashOut);
+        document.getElementById('claimReward').addEventListener('click', claimReward);
+        
+        document.getElementById('autoCashoutInput').addEventListener('input', function(e) {
+            // Permitir números, punto decimal y evitar borrado completo
+            if (this.value === '' && e.inputType === 'deleteContentBackward') {
+                this.value = '2.00'; // Restaurar valor predeterminado si se borra
+            } else {
+                this.value = this.value.replace(/[^0-9.]/g, '')
+                                      .replace(/(\..*)\./g, '$1');
+            }
+        });
+        
+        document.getElementById('autoCashoutInput').addEventListener('blur', function() {
+            let value = parseFloat(this.value);
+            if (isNaN(value) || value < 1) {
+                value = 2.00;
+            }
+            this.value = value.toFixed(2);
+            autoCashoutValue = value;
+            saveGameData();
+        });
+    </script>
+</body>
+</html>
