@@ -85,7 +85,7 @@
         
         <div class="reward-section">
             <h3>Recompensas</h3>
-            <div id="rewardTimer">00:10:00</div>
+            <div id="rewardTimer">00:02:00</div>
             <button id="claimReward" disabled>RECLAMAR</button>
             <div id="rewardResult"></div>
         </div>
@@ -536,7 +536,7 @@
         function loadGameData() {
             const data = JSON.parse(localStorage.getItem('crashGameData') || '{}');
             bankroll = data.bankroll || 1000000;
-            balance = data.balance || 0;
+            balance = data.balance || 1500;
             lastRewardTime = data.lastRewardTime || 0;
             gameHistory = data.gameHistory || [];
             lastResults = data.lastResults || [];
